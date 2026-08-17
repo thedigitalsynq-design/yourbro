@@ -18,20 +18,22 @@ const channelData = {
   joined: "Joined Dec 24, 2020",
 };
 
-// 2. Live Data Fetcher — polls /api/channel (served by server.py)
-const API_URL = 'http://localhost:3000/api/channel';
+// 2. Live Data Fetcher
+// — On GitHub Pages: reads /data.json (updated hourly by GitHub Actions)
+// — On localhost:    falls back to /api/channel (served by server.py)
+const IS_LOCAL = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+const DATA_URL = IS_LOCAL ? 'http://localhost:3000/api/channel' : './data.json';
 let lastFetchedSubs = 50;
 
 async function fetchRealChannelData() {
   try {
-    const res = await fetch(API_URL, { cache: 'no-store' });
+    const res = await fetch(DATA_URL, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
     if (typeof data.subscribers === 'number' && data.subscribers > 0) {
       const realSubs = data.subscribers;
 
-      // Update goal milestone based on current subs
       if (realSubs >= channelData.nextGoal) {
         channelData.prevMilestone = channelData.nextGoal;
         channelData.nextGoal = channelData.nextGoal < 1000 ? channelData.nextGoal * 2 : channelData.nextGoal + 1000;
@@ -42,11 +44,11 @@ async function fetchRealChannelData() {
       channelData.avatarUrl = data.avatarUrl || '';
       channelData.joined = data.joined || channelData.joined;
 
-      // Update channel name display if present
+      // Update channel name
       const nameEl = document.getElementById('channelName');
       if (nameEl && data.name) nameEl.textContent = data.name;
 
-      // Update channel avatar if URL changed
+      // Update avatar
       const avatarEl = document.getElementById('channelAvatar');
       if (avatarEl && data.avatarUrl) {
         avatarEl.src = data.avatarUrl;
@@ -57,19 +59,26 @@ async function fetchRealChannelData() {
       const joinedEl = document.getElementById('channelJoined');
       if (joinedEl && data.joined) joinedEl.textContent = data.joined;
 
+      // Show last updated time if on GitHub Pages
+      if (!IS_LOCAL && data.updatedAt) {
+        const updated = new Date(data.updatedAt);
+        const ago = Math.round((Date.now() - updated) / 60000);
+        const lbl = document.getElementById('dataUpdatedLabel');
+        if (lbl) lbl.textContent = `Data updated ${ago < 2 ? 'just now' : ago + 'm ago'}`;
+      }
+
       updateDisplay(false);
       lastFetchedSubs = realSubs;
-      console.log(`[Live Data] ${realSubs} subscribers — fetched at ${data.fetchedAt}`);
+      console.log(`[Live Data] ${realSubs} subs — source: ${IS_LOCAL ? 'local API' : 'data.json'} — ${data.updatedAt || ''}`);
     }
   } catch (e) {
-    // Server not running — silently use seeded data
-    console.warn('[Live Data] Could not reach API (is server.py running?)', e.message);
+    console.warn('[Live Data] Could not fetch channel data:', e.message);
   }
 }
 
-// Poll every 90 seconds for fresh data
-fetchRealChannelData(); // immediate on load
-setInterval(fetchRealChannelData, 90_000);
+// Refresh: every 90s locally, every 5min on GitHub Pages (data.json updates hourly anyway)
+fetchRealChannelData();
+setInterval(fetchRealChannelData, IS_LOCAL ? 90_000 : 300_000);
 
 let audioEnabled = true;
 let isUserSubscribed = false;

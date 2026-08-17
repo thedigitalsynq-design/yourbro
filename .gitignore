@@ -9,6 +9,9 @@ __pycache__/
 scraper.py
 scraper2.py
 
+# data.json is committed to the repo (updated by GitHub Actions)
+# DO NOT add data.json here
+
 # Environment
 .env
 .venv
